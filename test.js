@@ -22,7 +22,7 @@ casper.test.begin('Page content tests', 3, function suite(test) {
 		})
 		.then(function () {
 			this.echo('Toggle form');
-			this.click('button#payment');
+			this.click('button #payment');
 
 			test.assertVisible('.paymentSection');
 		})
