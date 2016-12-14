@@ -20,15 +20,22 @@
             width: 220px;
             height: 100%;
         }
-        button {
+        button, select {
             margin: 5px;
+            cursor: pointer;
             padding: 5px;
         }
         main {
             display: flex;
-            width: 100%;
+            width: 99vw;
             height: auto;
             margin: 10px;
+        }
+        th, td {
+            padding: 5px 10px;
+        }
+        tr {
+            border: dotted 1px #222; 
         }
     </style>
 </head>
@@ -36,16 +43,196 @@
     <header>
         <h1>Assignment</h1>
     </header>
+
+    <section id="paymentSection" hidden="true">
+        <form name="paymentForm" enctype='multipart/form-data' onsubmit="return addPayment()">
+            <select name="method" placeholder="Payment Method" required>
+                <option value="ideal">iDeal</option>
+                <option value="creditcard">Credit Card</option>
+                <option value="bank-transfer">Bank Transfer</option>
+            </select>
+            <input type="number" placeholder="Amount" name="amount" min="0" step="1" required>
+            <select name="currency" placeholder="Currency">
+                <option value="AUD">Australian Dollars</option>
+                <option value="USD">US Dollars</option>
+                <option value="GBP">British Pounds</option>
+                <option value="EUR">Euro</option>
+            </select required>
+            <input type="datetime-local" name="created" placeholder="Created On" required>
+            <select name="status" placeholder="Payment Status">
+                <option value="denied">Denied</option>
+                <option value="accepted">Accepted</option>
+            </select required>
+            <input type="text" name="merchant" placeholder="Merchant" required>
+            <input type="submit" value="Save Record">
+        </form>
+    </section>
+    <hr>
     <main>
         <aside>
-            <button>Callback</button>
-            <button>Promise</button>
-            <button>Filter Payment-Method</button>
-            <button>Add payment</button>
+            <button id="callback" onclick="requestWithCallbackHandler(responseHandler)" >Callback</button>
+            <button id="promise" onclick="returnWithPromise()">Promise</button>
+            <select name="param" onchange="paymentFilter()" id="filter">
+                <option disabled selected>Filter Payment-Method</option>
+                <option value="none">Clear Filters</option>
+                <option value="ideal">iDeal</option>
+                <option value="creditcard">Credit Card</option>
+                <option value="bank-transfer">Bank Transfer</option>
+            </select>
+            <button id="payment" onclick="toggleForm()">Add payment</button>
         </aside>
         <section>
             <!-- Payments Table -->
+            <table>
+                <thead>
+                    <th>ID</th>
+                    <th>Method</th>
+                    <th>Amount</th>
+                    <th>Currency</th>
+                    <th>Created</th>
+                    <th>Status</th>
+                    <th>Merchant</th>
+                </thead>
+                <tbody id="list"></tbody>
+            </table>
         </section>
     </main>
+    <!-- scripts -->
+    <script>
+        let ajax = new XMLHttpRequest();
+
+       
+
+        function responseHandler () {
+            if (ajax.readyState === XMLHttpRequest.DONE && ajax.status === 200) {
+                // everything is good, the response is received
+                const data = JSON.parse(ajax.responseText);
+                const dataRows = document.getElementById("list");
+
+                dataRows.innerHTML = '';
+
+                data.forEach(function(element, index) {
+                    const dataRow = document.createElement('tr');
+                    const child = dataRows.appendChild(dataRow);
+                    for(let key in element) {
+                        const dataCell = document.createElement('td');
+                        dataCell.textContent = element[key];
+                        child.appendChild(dataCell);
+                    }
+                });
+            } else {
+                // still not ready
+                console.log('Waiting for the server...')
+            }
+        }
+
+        function requestWithCallbackHandler(callback) {
+            // Using JSONServer's builtin filters
+            const url = "http://localhost:3000/payments?_sort=amount&_order=DESC&_limit=20";
+            ajax.open('GET', url);
+            ajax.send();
+
+            ajax.onreadystatechange = callback;
+
+            return callback()
+        }
+
+        function requestWithPromiseHandler(merchant) {
+            merchant = merchant || "Ginger";
+
+            const url = "http://localhost:3000/payments?merchant=" + merchant; 
+            return new Promise(function(resolve, reject) {
+                ajax.open('GET', url);
+                ajax.onload = function() {
+                    if(ajax.status === 200) {
+                        resolve(ajax.response);
+                    } else {
+                        reject(Error("Request failed with the followign error: " + ajax.statusText));
+                    }
+                }
+                ajax.onerror = function() {
+                    console.error('Reuqest cannot be processed.');
+                    reject(Error('Reuqest cannot be processed.'));
+                }
+                ajax.send();
+            });
+        }
+
+
+        function paymentFilter() {
+            const selectObj = document.getElementById('filter');
+            const filter = selectObj.value || "ideal";
+
+            const dataRows = document.getElementById("list");
+            if(dataRows.hasChildNodes()) {
+                dataRows.childNodes.forEach(function(node, index) {
+                    const methodCell = node.children[1]; // The second cell contains peyment method records 
+                    if (filter === methodCell.innerText || filter === 'none') {
+                        node.hidden = false
+                    } else {
+                        node.hidden = true
+                    }
+                });
+            }
+        }   
+
+        function addPayment() {
+            const url = "http://localhost:3000/payments";
+            let data = {
+                id: 0
+            };
+            const form = document.forms.namedItem('paymentForm');
+
+            // Create a formData iterator;
+            const formObj = (new FormData(form)).entries();
+
+            // JSON Server does not seems to support enctype=multipart/form-data and application/x-www-by defualt
+            let obj = formObj.next();
+
+            while (obj.value) {
+                data[obj.value[0]] = obj.value[1];
+                obj = formObj.next();
+            }
+
+            ajax.open('POST', url, true);
+            ajax.setRequestHeader('Content-Type', 'application/json');
+            ajax.send(JSON.stringify(data));
+
+            alert("Entry saved!");
+
+            return false
+        }
+
+        function returnWithPromise() {
+            console.log('trigered')
+            return requestWithPromiseHandler()
+                .then(function(data) {
+                    data = JSON.parse(data);
+                    const dataRows = document.getElementById("list");
+
+                    dataRows.innerHTML = '';
+
+                    // console.dir(data)
+                    data.forEach(function(element, index) {
+                        const dataRow = document.createElement('tr');
+                        const child = dataRows.appendChild(dataRow);
+                        for(let key in element) {
+                            const dataCell = document.createElement('td');
+                            dataCell.textContent = element[key];
+                            child.appendChild(dataCell);
+                        }
+                    });
+                })
+                .catch(function(Error) {
+                    console.log(Error);
+                });
+        }
+
+        function toggleForm() {
+            const section = document.getElementById('paymentSection');
+            section.hidden = !section.hidden
+            return false
+        }
+    </script>
 </body>
 </html>
